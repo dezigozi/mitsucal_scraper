@@ -1,0 +1,13 @@
+# 仮想環境（再現: python -m venv venv && pip install -r requirements.txt）
+venv/
+.venv/
+
+# 認証情報（env_template.txt を .env にコピーして使用）
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+.pytest_cache/
