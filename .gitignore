@@ -11,3 +11,12 @@ __pycache__/
 *$py.class
 .Python
 .pytest_cache/
+
+# Node
+node_modules/
+
+# クロール成果物
+output/
+archive/
+server.log
+.DS_Store

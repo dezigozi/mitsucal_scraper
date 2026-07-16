@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>みつかる君 サーチくん</title>
+<style>
+  :root {
+    --green: #2eae6d; --deep: #1e7e4d; --ok: #2eae6d; --ng: #e05563; --blue: #1d6fb8;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+    min-height: 100vh; padding: 32px 16px;
+    background: linear-gradient(135deg, #e9f9ef 0%, #f7fdf9 45%, #eef6fb 100%);
+    color: #234;
+  }
+  .card {
+    max-width: 760px; margin: 0 auto 18px; padding: 26px 28px;
+    background: rgba(255,255,255,.65); backdrop-filter: blur(14px);
+    border: 1px solid rgba(255,255,255,.8); border-radius: 20px;
+    box-shadow: 0 8px 28px rgba(30,126,77,.10);
+  }
+  h1 { font-size: 22px; color: var(--deep); display: flex; align-items: center; gap: 10px; }
+  h1 .sub { font-size: 12px; color: #789; font-weight: normal; }
+  .steps { display: flex; gap: 14px; margin-top: 20px; flex-wrap: wrap; }
+  .step { flex: 1; min-width: 220px; }
+  .step p.lbl { font-size: 13px; color: #567; margin-bottom: 8px; }
+  button {
+    width: 100%; padding: 16px 18px; font-size: 17px; font-weight: bold;
+    border: none; border-radius: 14px; cursor: pointer; color: #fff;
+    transition: transform .08s, box-shadow .2s;
+  }
+  button:active { transform: scale(.97); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  #btnCheck { background: linear-gradient(135deg, #62b6f0, var(--blue)); box-shadow: 0 6px 16px rgba(29,111,184,.35); }
+  #btnStart { background: linear-gradient(135deg, #ffb454, #f2822d); box-shadow: 0 6px 16px rgba(242,130,45,.35); }
+  #btnStop  { background: linear-gradient(135deg, #f28b95, var(--ng)); box-shadow: 0 6px 16px rgba(224,85,99,.3); display:none; }
+  #btnCsv   { background: linear-gradient(135deg, #57c98d, var(--ok)); box-shadow: 0 6px 16px rgba(46,174,109,.35); display:none; }
+  #btnFolder { background: linear-gradient(135deg, #8aa4bd, #5b7788); box-shadow: 0 6px 16px rgba(91,120,150,.3); }
+  #btnExcel { background: linear-gradient(135deg, #3aa876, #1e7e4d); box-shadow: 0 6px 16px rgba(30,126,77,.3); }
+  .btnrow { display: flex; gap: 12px; margin-top: 16px; flex-wrap: wrap; }
+  .btnrow button { flex: 1; min-width: 200px; }
+  .statusline { margin-top: 18px; font-size: 14px; display: flex; gap: 18px; flex-wrap: wrap; }
+  .statusline b { color: var(--deep); font-size: 18px; }
+  #phase { padding: 3px 12px; border-radius: 999px; background: #ddf5e8; color: var(--deep); font-size: 13px; }
+  #phase.running { background: #fff0dd; color: #d2721c; }
+  #phase.done { background: #ddf5e8; color: var(--ok); }
+  #phase.error { background: #fde3e6; color: var(--ng); }
+  .progwrap { margin-top: 14px; height: 14px; border-radius: 999px; background: rgba(30,126,77,.12); overflow: hidden; }
+  #progbar { height: 100%; width: 0%; border-radius: 999px; background: linear-gradient(90deg, #57c98d, var(--deep)); transition: width .4s; }
+  .curcar { margin-top: 8px; font-size: 13px; color: #567; min-height: 18px; }
+  pre {
+    margin-top: 14px; height: 300px; overflow-y: auto; padding: 14px;
+    background: rgba(20,50,35,.85); color: #d4f5e2; border-radius: 14px;
+    font-size: 12px; line-height: 1.7; white-space: pre-wrap; word-break: break-all;
+  }
+  .note { font-size: 12px; color: #789; margin-top: 10px; line-height: 1.8; }
+
+  /* ---- 保管庫・差分 ---- */
+  h2 { font-size: 17px; color: var(--deep); display: flex; align-items: center; gap: 8px; }
+  h2 .sub { font-size: 12px; color: #789; font-weight: normal; }
+  .chips { display: flex; gap: 10px; margin: 14px 0 4px; flex-wrap: wrap; }
+  .chip { padding: 6px 14px; border-radius: 999px; font-size: 13px; font-weight: bold; }
+  .chip.up { background: #fde3e6; color: #c0392b; }
+  .chip.down { background: #e0ecfb; color: #1a5fb4; }
+  .chip.add { background: #ddf5e8; color: #1e7e4d; }
+  .chip.del { background: #ececec; color: #666; }
+  .difftabs { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+  .difftabs button { flex: none; width: auto; padding: 8px 16px; font-size: 13px; border-radius: 10px;
+    background: #e7f5ec; color: #456; box-shadow: none; }
+  .difftabs button.active { background: var(--deep); color: #fff; }
+  .tablewrap { margin-top: 10px; max-height: 340px; overflow: auto; border-radius: 12px;
+    border: 1px solid rgba(30,126,77,.15); background: rgba(255,255,255,.7); }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th, td { padding: 6px 10px; border-bottom: 1px solid rgba(30,126,77,.08); text-align: left; white-space: nowrap; }
+  th { position: sticky; top: 0; background: #e7f5ec; color: var(--deep); z-index: 1; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td .up { color: #c0392b; font-weight: bold; }
+  td .down { color: #1a5fb4; font-weight: bold; }
+  tr.added td { background: rgba(46,174,109,.08); }
+  tr.removed td { background: rgba(0,0,0,.045); color: #777; }
+  .histinfo { font-size: 12px; color: #789; margin-top: 8px; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>🔧 みつかる君 サーチくん <span class="sub">全メーカー×車種の商品価格をCSVで取得するで！</span></h1>
+    <div class="steps">
+      <div class="step">
+        <p class="lbl">ステップ①（.envの設定チェック）</p>
+        <button id="btnCheck">🔑 ログイン確認</button>
+      </div>
+      <div class="step">
+        <p class="lbl">ステップ②（確認できたら押す）</p>
+        <button id="btnStart">🚀 スタート！</button>
+      </div>
+      <div class="step" style="max-width:170px">
+        <p class="lbl">実行中の操作</p>
+        <button id="btnStop">⛔ 中断</button>
+      </div>
+    </div>
+    <div class="statusline">
+      <span id="phase">待機中</span>
+      <span>車種 <b id="cars">0</b> / <b id="carsTotal">0</b></span>
+      <span>取得商品 <b id="items">0</b></span>
+      <span>通信 <b id="pages">0</b></span>
+    </div>
+    <div class="progwrap"><div id="progbar"></div></div>
+    <p id="curcar" class="curcar"></p>
+    <div class="btnrow">
+      <button id="btnCsv">⬇️ CSVをダウンロード</button>
+      <button id="btnFolder" title="保存フォルダ(output/)を開く">📁 保存フォルダを開く</button>
+    </div>
+    <pre id="log">ここに進捗ログが出るで〜</pre>
+    <p class="note">
+      ・ログインは <b>.env の認証情報で全自動</b>や（env_template.txt を .env にコピーして設定してな）。<br>
+      ・①はログインできるかのテストだけ。②を押したらクロールが裏で走るで。<br>
+      ・取りこぼした車種があったら自動で再試行して、最後に名前つきでログに出すで。<br>
+      ・CSVは output/ に自動保存（Excelでそのまま開けるBOM付きUTF-8）。<b>メーカー別にも区分け保存</b>されるで。
+    </p>
+  </div>
+
+  <div class="card" id="histCard">
+    <h2>📦 保管庫・差分 <span class="sub" id="histSub"></span></h2>
+    <div class="chips" id="chips" style="display:none">
+      <span class="chip up">値上げ <b id="cUp">0</b></span>
+      <span class="chip down">値下げ <b id="cDown">0</b></span>
+      <span class="chip add">新規 <b id="cAdd">0</b></span>
+      <span class="chip del">削除 <b id="cDel">0</b></span>
+    </div>
+    <p class="histinfo" id="histInfo">読み込み中…</p>
+    <div class="difftabs" id="diffTabs" style="display:none">
+      <button data-tab="changed" class="active">💴 価格変動</button>
+      <button data-tab="added">🆕 新規追加</button>
+      <button data-tab="removed">🗑 削除</button>
+    </div>
+    <div class="tablewrap" id="tableWrap" style="display:none">
+      <table id="diffTable"></table>
+    </div>
+    <div class="btnrow">
+      <button id="btnExcel">📊 価格履歴Excelをダウンロード</button>
+    </div>
+    <p class="note">
+      ・クロールが（取りこぼしゼロで）完走するたびに、結果が自動で保管庫（archive/）に貯まるで。<br>
+      ・2回分以上貯まると、ここに前回との差分（値上げ・値下げ・新規・削除）が出る。<br>
+      ・Excelは「商品1行 × 日付ごとの価格列」。<span style="background:#ddf5e8">新規=緑</span>・<span style="background:#e9e9e9">削除=グレー＋赤字「削除」</span>・<span style="background:#fff2b8">価格が変わったセル=黄色</span>（値上げ赤字/値下げ青字）や。
+    </p>
+  </div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const api = (p, m = 'POST') => fetch(p, { method: m }).then((r) => r.json());
+
+  $('btnCheck').onclick = async () => {
+    const b = $('btnCheck');
+    b.disabled = true; b.textContent = '🔑 確認中…（10秒くらい待ってな）';
+    try {
+      const r = await api('/api/check-login', 'GET');
+      if (r.loggedIn) { b.textContent = '✅ ログインOK！'; }
+      else { b.textContent = '🔑 ログイン確認'; alert('あかん、ログインできんかった: ' + (r.error || '')); }
+    } catch (e) {
+      b.textContent = '🔑 ログイン確認'; alert('確認に失敗したで: ' + e.message);
+    }
+    b.disabled = false;
+  };
+
+  $('btnStart').onclick = async () => {
+    $('btnStart').disabled = true;
+    const r = await api('/api/start');
+    if (!r.ok) { alert(r.error); $('btnStart').disabled = false; }
+  };
+
+  $('btnStop').onclick = () => api('/api/stop');
+  $('btnCsv').onclick = () => location.href = '/api/csv';
+  $('btnExcel').onclick = () => {
+    const b = $('btnExcel');
+    b.disabled = true; b.textContent = '📊 Excel作成中…（ちょい待ってな）';
+    setTimeout(() => { b.disabled = false; b.textContent = '📊 価格履歴Excelをダウンロード'; }, 6000);
+    location.href = '/api/excel';
+  };
+  $('btnFolder').onclick = async () => {
+    const r = await api('/api/open-folder');
+    if (!r.ok) alert('フォルダ開けんかった: ' + r.error);
+  };
+
+  // ---- 保管庫・差分 ----
+  const yen = (v) => (typeof v === 'number') ? v.toLocaleString() : (v || '');
+  let histData = null, curTab = 'changed';
+
+  function renderDiffTable() {
+    const t = $('diffTable');
+    if (!histData || !histData.diff) { t.innerHTML = ''; return; }
+    const rows = histData.diff[curTab] || [];
+    const total = histData.diff[curTab + 'Total'] || rows.length;
+    let html = '';
+    if (curTab === 'changed') {
+      html = '<tr><th>メーカー</th><th>車種</th><th>ジャンル</th><th>品番</th><th>品名</th><th>商品メーカー</th><th>前回</th><th>今回</th><th>差額</th></tr>' +
+        rows.map((r) => {
+          const cls = r.diff > 0 ? 'up' : 'down';
+          const sign = r.diff > 0 ? '+' : '';
+          return `<tr><td>${r.maker}</td><td>${r.carName}</td><td>${r.category || ''}</td><td>${r.hinban}</td><td>${r.name}</td><td>${r.brand}</td>` +
+            `<td class="num">${yen(r.oldPrice)}</td><td class="num">${yen(r.newPrice)}</td>` +
+            `<td class="num"><span class="${cls}">${sign}${yen(r.diff)}</span></td></tr>`;
+        }).join('');
+    } else {
+      const cls = curTab === 'added' ? 'added' : 'removed';
+      html = '<tr><th>メーカー</th><th>車種</th><th>ジャンル</th><th>品番</th><th>品名</th><th>商品メーカー</th><th>金額</th></tr>' +
+        rows.map((r) => `<tr class="${cls}"><td>${r.maker}</td><td>${r.carName}</td><td>${r.category || ''}</td><td>${r.hinban}</td>` +
+          `<td>${r.name}</td><td>${r.brand}</td><td class="num">${yen(r.price)}</td></tr>`).join('');
+    }
+    if (total > rows.length) {
+      html += `<tr><td colspan="9" style="color:#789">…ほか ${total - rows.length} 件（全部はExcelで見てな）</td></tr>`;
+    }
+    if (!rows.length) html += '<tr><td colspan="9" style="color:#789">該当なし</td></tr>';
+    t.innerHTML = html;
+  }
+
+  document.querySelectorAll('#diffTabs button').forEach((b) => {
+    b.onclick = () => {
+      curTab = b.dataset.tab;
+      document.querySelectorAll('#diffTabs button').forEach((x) => x.classList.toggle('active', x === b));
+      renderDiffTable();
+    };
+  });
+
+  async function loadHistory() {
+    try {
+      const h = await api('/api/history', 'GET');
+      if (!h.ok) return;
+      histData = h;
+      const n = (h.snapshots || []).length;
+      $('histSub').textContent = n ? `保管庫: ${n}回分（最新 ${h.snapshots[n-1]}）` : '';
+      if (!n) {
+        $('histInfo').textContent = 'まだ保管庫は空や。クロールが完走したら自動で貯まるで！';
+        return;
+      }
+      if (!h.diff) {
+        $('histInfo').textContent = `1回分だけ保管済みや（${h.snapshots[0]}）。もう1回クロールが完走したら、ここに差分が出るで！`;
+        return;
+      }
+      $('histInfo').textContent = `${h.prev} → ${h.latest} の比較や`;
+      const up = h.diff.changed.filter((r) => r.diff > 0).length;
+      const down = h.diff.changed.filter((r) => r.diff < 0).length;
+      $('cUp').textContent = up; $('cDown').textContent = down;
+      $('cAdd').textContent = h.diff.addedTotal; $('cDel').textContent = h.diff.removedTotal;
+      $('chips').style.display = 'flex';
+      $('diffTabs').style.display = 'flex';
+      $('tableWrap').style.display = 'block';
+      renderDiffTable();
+    } catch (_) {}
+  }
+  loadHistory();
+
+  const PHASE_LABEL = {
+    'idle': '待機中', 'crawling': '実行中…', 'done': '完了！', 'error': 'エラー',
+  };
+
+  let prevPhase = '';
+  setInterval(async () => {
+    try {
+      const s = await api('/api/status', 'GET');
+      if (s.phase === 'done' && prevPhase !== 'done') loadHistory(); // 完走したら差分を更新
+      prevPhase = s.phase;
+      $('pages').textContent = s.pagesDone;
+      $('cars').textContent = s.carsDone;
+      $('carsTotal').textContent = s.carsTotal;
+      $('items').textContent = s.itemsFound;
+      $('curcar').textContent = s.currentCar ? ('いま：' + s.currentCar) : '';
+      const pct = s.carsTotal ? Math.round((s.carsDone / s.carsTotal) * 100) : (s.phase === 'done' ? 100 : 0);
+      $('progbar').style.width = pct + '%';
+      const ph = $('phase');
+      ph.textContent = (PHASE_LABEL[s.phase] || s.phase) + (s.running && s.carsTotal ? ` ${pct}%` : '');
+      ph.className = s.running ? 'running' : (s.phase === 'done' ? 'done' : s.phase === 'error' ? 'error' : '');
+      $('btnStart').disabled = s.running;
+      $('btnStop').style.display = s.running ? 'block' : 'none';
+      $('btnCsv').style.display = (s.csvPath && !s.running) ? 'block' : 'none';
+      const logEl = $('log');
+      const stick = logEl.scrollTop + logEl.clientHeight >= logEl.scrollHeight - 30;
+      logEl.textContent = (s.log || []).join('\n') || 'ここに進捗ログが出るで〜';
+      if (stick) logEl.scrollTop = logEl.scrollHeight;
+    } catch (_) {}
+  }, 1000);
+</script>
+</body>
+</html>

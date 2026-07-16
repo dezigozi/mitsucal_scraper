@@ -1,0 +1,14 @@
+{
+  "name": "mitsucal-scraper",
+  "version": "2.0.0",
+  "private": true,
+  "description": "みつかる君 サーチくん — 全メーカー×車種の商品価格をダッシュボードから取得",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "exceljs": "^4.4.0",
+    "playwright": "^1.61.1"
+  }
+}
