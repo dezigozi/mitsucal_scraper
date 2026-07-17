@@ -315,13 +315,14 @@ function hinbanRows(genre, mitRecords, emkRecords) {
   return rows;
 }
 
+const esc = (v) => {
+  const s = String(v ?? '');
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+};
+const fmtItems = (items) => items.map((i) => `${i.name} ¥${i.price.toLocaleString()}`).join(' / ');
+
 /** 比較結果 → CSVテキスト（Excel用にBOMを付けて返す） */
 function toCsv(result) {
-  const esc = (v) => {
-    const s = String(v ?? '');
-    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-  };
-  const fmtItems = (items) => items.map((i) => `${i.name} ¥${i.price.toLocaleString()}`).join(' / ');
   const header = result.mode === 'hinban'
     ? ['マッチ', 'ブランド', '品番_みつかる君', '品番_Eマエカワ',
       'みつかる君_商品(税抜)', 'Eマエカワ_商品(車種別)', 'みつかる君_最安', 'Eマエカワ_最安', '最安差額(み-E)']
@@ -336,24 +337,47 @@ function toCsv(result) {
   return '﻿' + lines.join('\n') + '\n';
 }
 
+/** 全ジャンルの比較結果 → ジャンル列付きの1本のCSVテキスト */
+function toCsvAll() {
+  const header = ['ジャンル', 'マッチ', 'メーカー/ブランド', '車種・品番_みつかる君', '車種・品番_Eマエカワ',
+    'みつかる君_商品(税抜)', 'Eマエカワ_商品', 'みつかる君_最安', 'Eマエカワ_最安', '最安差額(み-E)'];
+  const lines = [header.join(',')];
+  for (const genreKey of Object.keys(GENRES)) {
+    const result = compare(genreKey);
+    for (const r of result.rows) {
+      lines.push([result.genreLabel, r.match, r.maker, r.mitNames, r.emkNames,
+        fmtItems(r.mitItems), fmtItems(r.emkItems),
+        r.mitMin ?? '', r.emkMin ?? '', r.diff ?? ''].map(esc).join(','));
+    }
+  }
+  return '﻿' + lines.join('\n') + '\n';
+}
+
 function makeCsvPath(genreKey) {
   const d = new Date();
   const pad = (n) => String(n).padStart(2, '0');
   const stamp = `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}`;
-  return path.join(MITSUCAL_DIR, `${GENRES[genreKey].label}価格比較_${stamp}.csv`);
+  const label = genreKey === 'all' ? '全ジャンル' : GENRES[genreKey].label;
+  return path.join(MITSUCAL_DIR, `${label}価格比較_${stamp}.csv`);
 }
 
-module.exports = { compare, toCsv, makeCsvPath, GENRES };
+module.exports = { compare, toCsv, toCsvAll, makeCsvPath, GENRES };
 
 // ---- CLI ----
 if (require.main === module) {
   const genreKey = process.argv[2] || 'mat';
-  const result = compare(genreKey);
-  console.log(`みつかる君: ${result.mitCsv}`);
-  console.log(`Eマエカワ : ${result.emkCsv}`);
-  const s = result.stats;
-  console.log(`【${result.genreLabel}】紐づけ成功: ${s.matched}行 / みつかる君のみ: ${s.mitOnly} / Eマエカワのみ: ${s.emkOnly} / 価格差あり: ${s.diffCount}`);
-  const out = makeCsvPath(genreKey);
-  fs.writeFileSync(out, toCsv(result));
-  console.log(`出力: ${out}`);
+  if (genreKey === 'all') {
+    const out = makeCsvPath('all');
+    fs.writeFileSync(out, toCsvAll());
+    console.log(`全ジャンル（${Object.values(GENRES).map((g) => g.label).join('・')}）まとめCSVを出力: ${out}`);
+  } else {
+    const result = compare(genreKey);
+    console.log(`みつかる君: ${result.mitCsv}`);
+    console.log(`Eマエカワ : ${result.emkCsv}`);
+    const s = result.stats;
+    console.log(`【${result.genreLabel}】紐づけ成功: ${s.matched}行 / みつかる君のみ: ${s.mitOnly} / Eマエカワのみ: ${s.emkOnly} / 価格差あり: ${s.diffCount}`);
+    const out = makeCsvPath(genreKey);
+    fs.writeFileSync(out, toCsv(result));
+    console.log(`出力: ${out}`);
+  }
 }

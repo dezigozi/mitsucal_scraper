@@ -84,6 +84,7 @@
 
   /* ---- Eマエカワ価格比較 ---- */
   #btnCompareCsv { background: linear-gradient(135deg, #b08ae0, #7e57c2); box-shadow: 0 6px 16px rgba(126,87,194,.3); }
+  #btnCompareAllCsv { background: linear-gradient(135deg, #7e57c2, #4527a0); box-shadow: 0 6px 16px rgba(69,39,160,.3); }
   .chip.match { background: #ddf5e8; color: #1e7e4d; }
   .chip.diff { background: #fff0dd; color: #d2721c; }
   .chip.only { background: #ececec; color: #666; }
@@ -179,7 +180,8 @@
       <table id="cmpTable"></table>
     </div>
     <div class="btnrow">
-      <button id="btnCompareCsv">⚖️ 比較CSVをダウンロード</button>
+      <button id="btnCompareCsv">⚖️ このジャンルの比較CSV</button>
+      <button id="btnCompareAllCsv">📦 全ジャンルまとめCSV（マット＋バイザー＋ナビ）</button>
     </div>
     <p class="note">
       ・隣の <b>e-maekawa_search</b> の最新CSVと、みつかる君の最新CSVを自動で紐づけて比較するで。<br>
@@ -373,6 +375,7 @@
     };
   });
   $('btnCompareCsv').onclick = () => location.href = '/api/compare/csv?genre=' + cmpGenre;
+  $('btnCompareAllCsv').onclick = () => location.href = '/api/compare/csv?genre=all';
   loadCompare();
 
   const PHASE_LABEL = {

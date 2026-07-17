@@ -7,8 +7,9 @@
     - 両プロジェクトの output/ から最新の全車種商品CSVを自動で拾う（Eマエカワは `../e-maekawa_search/output`）
     - **車種名紐づけ（mode:'car'＝マット/バイザー）**：NFKC・括弧サフィックス除去・ィ→イ・ハイフン/スペース除去＋エイリアス辞書（AURA→オーラ等9件）
     - **品番紐づけ（mode:'hinban'＝ナビ）**：みつかる君は品番列、Eマエカワは商品名の先頭トークンを品番として抽出。同一品番を最優先、無ければ相当品番表 EQUIV_HINBAN（世代違い D213↔D212M/WM・D413↔D412・D613↔D612）で「≒(相当品番)」マッチ
-    - CLI：`node compare.js [mat|visor|navi]`
-  - `server.js`：`GET /api/compare?genre=mat|visor|navi`（JSON）と `GET /api/compare/csv?genre=…`（CSV DL＋output/保存）
+    - CLI：`node compare.js [mat|visor|navi|all]`（all=3ジャンルをジャンル列付きで1本のCSVに縦積み）
+  - `server.js`：`GET /api/compare?genre=mat|visor|navi`（JSON）と `GET /api/compare/csv?genre=…|all`（CSV DL＋output/保存）
+  - UIに「📦 全ジャンルまとめCSV」ボタンあり（マット＋バイザー＋ナビ＝384行・列は共通化: 車種・品番_みつかる君 等）
   - `public/index.html`：「⚖️ Eマエカワ価格比較」カード（ジャンル3タブ＋価格差あり/同額/み単独/E単独タブ＋CSV DL。表示時と クロール完走時に自動読込）
   - 動作確認済み：マット＝121紐づけ・差あり107／バイザー＝120・差あり116／ナビ＝相当品番4行（完全同一品番は現状ゼロ）・み単独22（DA機とナビレディセットK-系はEマエカワに無し）。UIスクショ確認済み
   - アクア：みつかる君 市販マット¥4,800 ＝ Eマエカワ シンプルマット¥4,800 で同額

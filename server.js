@@ -136,10 +136,10 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'GET' && url.pathname === '/api/compare/csv') {
     try {
       const genre = url.searchParams.get('genre') || 'mat';
-      const result = compareMod.compare(genre);
+      const csv = genre === 'all' ? compareMod.toCsvAll() : compareMod.toCsv(compareMod.compare(genre));
       fs.mkdirSync(crawler.OUTPUT_DIR, { recursive: true });
       const file = compareMod.makeCsvPath(genre);
-      fs.writeFileSync(file, compareMod.toCsv(result)); // output/ にも残す
+      fs.writeFileSync(file, csv); // output/ にも残す
       res.writeHead(200, {
         'Content-Type': 'text/csv; charset=utf-8',
         'Content-Disposition': `attachment; filename="${encodeURIComponent(path.basename(file))}"`,
