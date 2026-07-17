@@ -73,14 +73,21 @@
   .tablewrap { margin-top: 10px; max-height: 340px; overflow: auto; border-radius: 12px;
     border: 1px solid rgba(30,126,77,.15); background: rgba(255,255,255,.7); }
   table { width: 100%; border-collapse: collapse; font-size: 12px; }
-  th, td { padding: 6px 10px; border-bottom: 1px solid rgba(30,126,77,.08); text-align: left; white-space: nowrap; }
+  th, td { padding: 6px 10px; border-bottom: 1px solid rgba(30,126,77,.08); text-align: left; white-space: nowrap; vertical-align: top; }
   th { position: sticky; top: 0; background: #e7f5ec; color: var(--deep); z-index: 1; }
   td.num { text-align: right; font-variant-numeric: tabular-nums; }
-  td .up { color: #c0392b; font-weight: bold; }
-  td .down { color: #1a5fb4; font-weight: bold; }
+  td .up, .note .up { color: #c0392b; font-weight: bold; }
+  td .down, .note .down { color: #1a5fb4; font-weight: bold; }
   tr.added td { background: rgba(46,174,109,.08); }
   tr.removed td { background: rgba(0,0,0,.045); color: #777; }
   .histinfo { font-size: 12px; color: #789; margin-top: 8px; }
+
+  /* ---- Eマエカワ価格比較 ---- */
+  #btnCompareCsv { background: linear-gradient(135deg, #b08ae0, #7e57c2); box-shadow: 0 6px 16px rgba(126,87,194,.3); }
+  .chip.match { background: #ddf5e8; color: #1e7e4d; }
+  .chip.diff { background: #fff0dd; color: #d2721c; }
+  .chip.only { background: #ececec; color: #666; }
+  td.items { white-space: normal; min-width: 260px; max-width: 420px; font-size: 11px; color: #567; }
 </style>
 </head>
 <body>
@@ -145,6 +152,41 @@
       ・クロールが（取りこぼしゼロで）完走するたびに、結果が自動で保管庫（archive/）に貯まるで。<br>
       ・2回分以上貯まると、ここに前回との差分（値上げ・値下げ・新規・削除）が出る。<br>
       ・Excelは「商品1行 × 日付ごとの価格列」。<span style="background:#ddf5e8">新規=緑</span>・<span style="background:#e9e9e9">削除=グレー＋赤字「削除」</span>・<span style="background:#fff2b8">価格が変わったセル=黄色</span>（値上げ赤字/値下げ青字）や。
+    </p>
+  </div>
+
+  <div class="card" id="cmpCard">
+    <h2>⚖️ Eマエカワ価格比較 <span class="sub" id="cmpSub"></span></h2>
+    <div class="difftabs" id="cmpGenres">
+      <button data-genre="mat" class="active">🧺 フロアマット</button>
+      <button data-genre="visor" >🌂 サイドバイザー</button>
+      <button data-genre="navi" >🧭 ナビ（品番）</button>
+    </div>
+    <div class="chips" id="cmpChips" style="display:none">
+      <span class="chip match">紐づけ成功 <b id="cmpMatched">0</b></span>
+      <span class="chip diff">価格差あり <b id="cmpDiff">0</b></span>
+      <span class="chip only">みつかる君のみ <b id="cmpMitOnly">0</b></span>
+      <span class="chip only">Eマエカワのみ <b id="cmpEmkOnly">0</b></span>
+    </div>
+    <p class="histinfo" id="cmpInfo">読み込み中…</p>
+    <div class="difftabs" id="cmpTabs" style="display:none">
+      <button data-tab="diff" class="active">💴 価格差あり</button>
+      <button data-tab="same">🤝 同額</button>
+      <button data-tab="mitOnly">🔧 みつかる君のみ</button>
+      <button data-tab="emkOnly">🏭 Eマエカワのみ</button>
+    </div>
+    <div class="tablewrap" id="cmpWrap" style="display:none">
+      <table id="cmpTable"></table>
+    </div>
+    <div class="btnrow">
+      <button id="btnCompareCsv">⚖️ 比較CSVをダウンロード</button>
+    </div>
+    <p class="note">
+      ・隣の <b>e-maekawa_search</b> の最新CSVと、みつかる君の最新CSVを自動で紐づけて比較するで。<br>
+      ・マット/バイザーは<b>車種名</b>で紐づけ。表記ゆれ（括弧の注記・ィ/イ・ハイフン・ローマ字/カタカナ等）は自動で吸収。それでも紐づかへんのは片方にしか無い車種や。<br>
+      ・ナビは<b>品番</b>で紐づけ。同一品番を最優先、無いときは相当品番（世代違い: D213↔D212等）を「≒(相当品番)」として比較するで。両者とも同じ品番でも車種で価格が違うから、車種別の価格を全部並べとる。<br>
+      ・差額は <b>みつかる君の最安 − Eマエカワの最安</b>。<span class="up">＋赤=みつかる君のほうが高い</span>／<span class="down">−青=安い</span>。<br>
+      ・みつかる君は税抜。Eマエカワはサイト表示のまま（税表記なし）やから、そこだけ頭に入れといてな。
     </p>
   </div>
 
@@ -252,6 +294,87 @@
   }
   loadHistory();
 
+  // ---- Eマエカワ価格比較 ----
+  let cmpData = null, cmpGenre = 'mat', cmpTab = 'diff';
+
+  function cmpRows() {
+    if (!cmpData) return [];
+    const rows = cmpData.rows;
+    if (cmpTab === 'diff') return rows.filter((r) => r.diff !== null && r.diff !== 0);
+    if (cmpTab === 'same') return rows.filter((r) => r.diff === 0);
+    if (cmpTab === 'mitOnly') return rows.filter((r) => r.match === 'みつかる君のみ');
+    return rows.filter((r) => r.match === 'Eマエカワのみ');
+  }
+
+  function renderCmpTable() {
+    const t = $('cmpTable');
+    const fmtItems = (items) => {
+      const shown = items.slice(0, 8).map((i) => `${i.name} ¥${yen(i.price)}`).join(' ／ ');
+      return items.length > 8 ? `${shown} ／ <span style="color:#789">…ほか${items.length - 8}件（全部はCSVで見てな）</span>` : shown;
+    };
+    const rows = cmpRows();
+    const hinban = cmpData && cmpData.mode === 'hinban';
+    let html = hinban
+      ? '<tr><th>マッチ</th><th>ブランド</th><th>品番（みつかる君）</th><th>品番（Eマエカワ）</th>' +
+        '<th>み最安</th><th>E最安</th><th>差額(み−E)</th><th>みつかる君の商品（車種別価格）</th><th>Eマエカワの商品（車種別価格）</th></tr>'
+      : '<tr><th>メーカー</th><th>車種（みつかる君）</th><th>車種（Eマエカワ）</th>' +
+        '<th>み最安</th><th>E最安</th><th>差額(み−E)</th><th>みつかる君の商品</th><th>Eマエカワの商品</th></tr>';
+    html += rows.map((r) => {
+      let diffCell = '';
+      if (r.diff !== null) {
+        const cls = r.diff > 0 ? 'up' : r.diff < 0 ? 'down' : '';
+        diffCell = `<span class="${cls}">${r.diff > 0 ? '+' : ''}${yen(r.diff)}</span>`;
+      }
+      return `<tr>${hinban ? `<td>${r.match}</td>` : ''}<td>${r.maker}</td><td>${r.mitNames}</td><td>${r.emkNames}</td>` +
+        `<td class="num">${yen(r.mitMin)}</td><td class="num">${yen(r.emkMin)}</td>` +
+        `<td class="num">${diffCell}</td>` +
+        `<td class="items">${fmtItems(r.mitItems)}</td><td class="items">${fmtItems(r.emkItems)}</td></tr>`;
+    }).join('');
+    if (!rows.length) html += '<tr><td colspan="9" style="color:#789">該当なし</td></tr>';
+    t.innerHTML = html;
+  }
+
+  async function loadCompare() {
+    $('cmpInfo').textContent = '読み込み中…';
+    $('cmpChips').style.display = 'none';
+    $('cmpTabs').style.display = 'none';
+    $('cmpWrap').style.display = 'none';
+    try {
+      const c = await api('/api/compare?genre=' + cmpGenre, 'GET');
+      if (!c.ok) { $('cmpInfo').textContent = '⚠️ ' + (c.error || '比較できんかった'); return; }
+      cmpData = c;
+      $('cmpSub').textContent = `${c.mitCsv} × ${c.emkCsv}`;
+      $('cmpMatched').textContent = c.stats.matched;
+      $('cmpDiff').textContent = c.stats.diffCount;
+      $('cmpMitOnly').textContent = c.stats.mitOnly;
+      $('cmpEmkOnly').textContent = c.stats.emkOnly;
+      $('cmpInfo').textContent = `【${c.genreLabel}】${c.stats.matched}車種を紐づけて比較したで`;
+      $('cmpChips').style.display = 'flex';
+      $('cmpTabs').style.display = 'flex';
+      $('cmpWrap').style.display = 'block';
+      renderCmpTable();
+    } catch (e) {
+      $('cmpInfo').textContent = '⚠️ 比較の読み込みに失敗: ' + e.message;
+    }
+  }
+
+  document.querySelectorAll('#cmpGenres button').forEach((b) => {
+    b.onclick = () => {
+      cmpGenre = b.dataset.genre;
+      document.querySelectorAll('#cmpGenres button').forEach((x) => x.classList.toggle('active', x === b));
+      loadCompare();
+    };
+  });
+  document.querySelectorAll('#cmpTabs button').forEach((b) => {
+    b.onclick = () => {
+      cmpTab = b.dataset.tab;
+      document.querySelectorAll('#cmpTabs button').forEach((x) => x.classList.toggle('active', x === b));
+      renderCmpTable();
+    };
+  });
+  $('btnCompareCsv').onclick = () => location.href = '/api/compare/csv?genre=' + cmpGenre;
+  loadCompare();
+
   const PHASE_LABEL = {
     'idle': '待機中', 'crawling': '実行中…', 'done': '完了！', 'error': 'エラー',
   };
@@ -260,7 +383,7 @@
   setInterval(async () => {
     try {
       const s = await api('/api/status', 'GET');
-      if (s.phase === 'done' && prevPhase !== 'done') loadHistory(); // 完走したら差分を更新
+      if (s.phase === 'done' && prevPhase !== 'done') { loadHistory(); loadCompare(); } // 完走したら差分と比較を更新
       prevPhase = s.phase;
       $('pages').textContent = s.pagesDone;
       $('cars').textContent = s.carsDone;

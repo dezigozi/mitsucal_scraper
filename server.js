@@ -13,6 +13,7 @@ const path = require('path');
 const { exec } = require('child_process');
 const crawler = require('./crawler');
 const historyExcel = require('./history_excel');
+const compareMod = require('./compare');
 
 const PORT = 3940;
 
@@ -114,6 +115,33 @@ const server = http.createServer(async (req, res) => {
       await historyExcel.buildHistoryWorkbook(file);
       res.writeHead(200, {
         'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'Content-Disposition': `attachment; filename="${encodeURIComponent(path.basename(file))}"`,
+      });
+      return res.end(fs.readFileSync(file));
+    } catch (e) {
+      return json(res, 500, { ok: false, error: e.message });
+    }
+  }
+
+  // ---- Eマエカワ価格比較 ----
+  if (req.method === 'GET' && url.pathname === '/api/compare') {
+    try {
+      const genre = url.searchParams.get('genre') || 'mat';
+      return json(res, 200, compareMod.compare(genre));
+    } catch (e) {
+      return json(res, 500, { ok: false, error: e.message });
+    }
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/compare/csv') {
+    try {
+      const genre = url.searchParams.get('genre') || 'mat';
+      const result = compareMod.compare(genre);
+      fs.mkdirSync(crawler.OUTPUT_DIR, { recursive: true });
+      const file = compareMod.makeCsvPath(genre);
+      fs.writeFileSync(file, compareMod.toCsv(result)); // output/ にも残す
+      res.writeHead(200, {
+        'Content-Type': 'text/csv; charset=utf-8',
         'Content-Disposition': `attachment; filename="${encodeURIComponent(path.basename(file))}"`,
       });
       return res.end(fs.readFileSync(file));
