@@ -1,6 +1,7 @@
 # PROGRESS
 
 ## いま何をやっているか
+- **2026-07-31 サイトのASP.NET化に対応完了**：ログイン欄ID変更（txtLoginId等・新旧両対応）／車種コードはhidden input `hidMakerCarCd` から取得／車種選択はpostbackボタンclick方式。ブラウザ起動はタイムアウト30秒＋3回リトライ、クロール後は毎回closeBrowser（長期起動サーバーでlaunchが「browser has been closed」で死ぬ再発防止）。3車種テストで44行取得を確認済み。本番クロール（②スタート）はこれから
 - **Eマエカワ価格比較をダッシュボードに正式実装完了**（2026-07-17）：マット・バイザー・ナビの3ジャンル
   - 実装先は**みつかる君のみ**（Eマエカワ側は週次自動実行で安定運用中のため触らない方針）
   - `compare.js`：比較モジュール（Node版に一本化、Python版 compare_emaekawa.py は削除済み）

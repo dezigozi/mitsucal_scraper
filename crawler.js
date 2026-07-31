@@ -17,6 +17,16 @@ const BASE_URL = 'https://mitsucal.arai-denki.co.jp';
 const LOGIN_URL = BASE_URL + '/mypages/login';
 const NAV_TIMEOUT = 60000;
 const ELEM_TIMEOUT = 30000;
+const LAUNCH_TIMEOUT = 30000;
+
+// ログインフォームの入力欄。2026-07にサイトがASP.NET化してidが総取っ替えされたため、
+// 新id → 旧id の順に試す（また変わったら先頭に足すこと）。
+const LOGIN_FIELDS = {
+  username: ['#txtLoginId', '#MypageLoginId'],
+  password: ['#txtPassword', '#MypagePassword'],
+  companyCode: ['#txtCompanyCd', '#MypageCompanyCd'],
+  submit: ['#btnLogin', "input[type='image']"],
+};
 
 const OUTPUT_DIR = path.join(__dirname, 'output');
 const ARCHIVE_DIR = path.join(__dirname, 'archive');
@@ -77,9 +87,31 @@ function loadEnv() {
 }
 
 // ---- ブラウザ管理 ----------------------------------------------------------
+/**
+ * ブラウザ起動。長時間起動しっぱなしのサーバーではChromeプロセスだけ先に死ぬことがあり、
+ * その状態のlaunchは「Target page, context or browser has been closed」で落ちる。
+ * → タイムアウト付きで最大3回リトライし、失敗した殻は必ず捨ててから張り直す。
+ */
+async function launchBrowser() {
+  const attempts = 3;
+  let lastErr = null;
+  for (let i = 1; i <= attempts; i++) {
+    try {
+      return await chromium.launch({ headless: true, timeout: LAUNCH_TIMEOUT });
+    } catch (e) {
+      lastErr = e;
+      log(`⚠ ブラウザ起動に失敗（${i}/${attempts}回目）: ${e.message.split('\n')[0]}`);
+      await closeBrowser();
+      if (i < attempts) await new Promise((r) => setTimeout(r, 2000 * i));
+    }
+  }
+  throw new Error(`ブラウザを起動できひんかった（${attempts}回試した）: ${lastErr && lastErr.message.split('\n')[0]}`);
+}
+
 async function getPage() {
   if (!browser || !browser.isConnected()) {
-    browser = await chromium.launch({ headless: true });
+    await closeBrowser();
+    browser = await launchBrowser();
   }
   const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, locale: 'ja-JP' });
   const page = await context.newPage();
@@ -93,14 +125,24 @@ async function closeBrowser() {
 }
 
 // ---- ログイン --------------------------------------------------------------
+/** 候補セレクタを順に試す。全部無かったらどれを探したか分かる形で落とす。 */
+async function findField(page, selectors, label) {
+  for (const sel of selectors) {
+    if (await page.$(sel)) return sel;
+  }
+  throw new Error(`ログイン画面の「${label}」が見つからへん（試したのは ${selectors.join(' / ')}）。サイトの作りが変わったかもしれん`);
+}
+
 async function login(page, creds) {
   log('ログインページにアクセス中…');
   await page.goto(LOGIN_URL, { waitUntil: 'domcontentloaded' });
   state.pagesDone++;
-  await page.fill('#MypageLoginId', creds.username);
-  await page.fill('#MypagePassword', creds.password);
-  if (creds.companyCode) await page.fill('#MypageCompanyCd', creds.companyCode);
-  await page.click("input[type='image']");
+  await page.fill(await findField(page, LOGIN_FIELDS.username, 'ID'), creds.username);
+  await page.fill(await findField(page, LOGIN_FIELDS.password, 'パスワード'), creds.password);
+  if (creds.companyCode) {
+    await page.fill(await findField(page, LOGIN_FIELDS.companyCode, '会社コード'), creds.companyCode);
+  }
+  await page.click(await findField(page, LOGIN_FIELDS.submit, 'ログインボタン'));
   await page.waitForSelector('.topBox', { timeout: ELEM_TIMEOUT });
   log('ログイン成功や！');
 }
@@ -117,6 +159,8 @@ async function checkLogin() {
     return true;
   } finally {
     await page.context().close().catch(() => {});
+    // ブラウザを残すと、サーバーを何日も起動しっぱなしにしたとき殻だけ腐って次回のlaunchが死ぬ
+    await closeBrowser();
   }
 }
 
@@ -137,15 +181,17 @@ async function getMakers(page) {
 /**
  * メーカーページの車種一覧。
  * ※ DOMには全メーカーの車種が入っていて、そのメーカーの分だけが表示される構造。
- *   車種valueの先頭がメーカーコード（例 "001:..."=トヨタ）なので、それでフィルタする。
+ *   車種コードは各liのhidden input（hidMakerCarCd、例 "001:001120400"）に入っていて、
+ *   先頭がメーカーコードなのでそれでフィルタする。
+ *   （2026-07のASP.NET化でチェックボックスvalueは"on"になり、コードはhiddenに移った）
  */
 async function getCars(page, makerCode) {
   const all = await page.evaluate(() => {
     const result = [];
-    for (const cb of document.querySelectorAll('input[name="data[Product][car_cd][]"]')) {
-      const li = cb.closest('li');
+    for (const hid of document.querySelectorAll('input[type="hidden"][name*="hidMakerCarCd"]')) {
+      const li = hid.closest('li');
       const img = li ? li.querySelector('img') : null;
-      result.push({ value: cb.value, name: img ? img.alt : '' });
+      result.push({ value: hid.value, name: img ? img.alt : '' });
     }
     return result;
   });
@@ -188,11 +234,20 @@ async function openProductsPage(page, makerHref, carValue) {
   await page.goto(BASE_URL + makerHref, { waitUntil: 'domcontentloaded' });
   state.pagesDone++;
   await page.waitForSelector('.carBox li', { state: 'attached', timeout: ELEM_TIMEOUT });
+  // hidMakerCarCd の値で車種を名指し→同じliのチェックボックスをONにして送信ボタンをクリック
+  // （ASP.NETのpostbackなので form.submit() やなくボタンclickで送ること）
   await page.evaluate((val) => {
-    const cbs = document.querySelectorAll('input[name="data[Product][car_cd][]"]');
-    for (const cb of cbs) cb.checked = false;
-    for (const cb of cbs) { if (cb.value === val) { cb.checked = true; break; } }
-    document.getElementById('ProductSelectCarsForm').submit();
+    document.querySelectorAll('input[type="checkbox"]').forEach((cb) => { cb.checked = false; });
+    let found = false;
+    for (const hid of document.querySelectorAll('input[type="hidden"][name*="hidMakerCarCd"]')) {
+      if (hid.value === val) {
+        const cb = hid.closest('li').querySelector('input[type="checkbox"]');
+        if (cb) { cb.checked = true; found = true; }
+        break;
+      }
+    }
+    if (!found) throw new Error(`車種コード ${val} がページに見つからへん`);
+    document.getElementById('MainContent_SubmitButton').click();
   }, carValue);
   try {
     await page.waitForURL(/\/products\/products/, { timeout: 15000 });
@@ -357,6 +412,7 @@ async function runCrawl(opts = {}) {
   if (state.running) throw new Error('すでに実行中やで');
   const conf = { ...DEFAULTS, ...opts };
   abortFlag = false;
+  state.log.length = 0; // 前回実行分のログはここでリセット（画面に残りっぱなしにしない）
   state.running = true;
   state.phase = 'crawling';
   state.pagesDone = 0;
@@ -507,6 +563,7 @@ async function runCrawl(opts = {}) {
     state.running = false;
     state.currentCar = '';
     if (page) await page.context().close().catch(() => {});
+    await closeBrowser();
   }
 }
 
