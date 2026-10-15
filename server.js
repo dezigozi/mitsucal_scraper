@@ -63,6 +63,7 @@ const server = http.createServer(async (req, res) => {
       carsTotal: s.carsTotal, carsDone: s.carsDone, currentCar: s.currentCar,
       itemsFound: s.itemsFound, envReady: s.envReady,
       csvPath: s.csvPath, csvName: s.csvPath ? path.basename(s.csvPath) : '',
+      exportDir: s.exportDir,
       lastError: s.lastError,
       log: s.log.slice(-200),
     });

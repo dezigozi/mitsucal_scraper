@@ -8,10 +8,12 @@
  *   output/mitsucal_全車種商品_{stamp}.csv      … 全件CSV（BOM付きUTF-8）
  *   output/メーカー別/{stamp}/{メーカー}.csv     … メーカーごとに区分けしたCSV
  *   archive/{stamp}.json                        … 完走時のみ保存（差分比較用の保管庫）
+ *   Dropbox …/みつかる君/{年}/スクレイピング/{YYYYMMDD}/ … 全車種の本番取得のたびに書き出し（dropbox_export.js）
  */
 const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
+const dropboxExport = require('./dropbox_export');
 
 const BASE_URL = 'https://mitsucal.arai-denki.co.jp';
 const LOGIN_URL = BASE_URL + '/mypages/login';
@@ -51,6 +53,7 @@ const state = {
   warnings: 0,
   failedCars: [],
   csvPath: '',
+  exportDir: '',
   lastError: '',
   envReady: false,
   log: [],
@@ -425,6 +428,7 @@ async function runCrawl(opts = {}) {
   state.warnings = 0;
   state.failedCars = [];
   state.csvPath = '';
+  state.exportDir = '';
   state.lastError = '';
 
   const stamp = makeStamp();
@@ -550,7 +554,18 @@ async function runCrawl(opts = {}) {
     } else if (failedFinal.length) {
       log('📦 取りこぼしがあったから、今回は保管庫（差分比較用）には保存せんかったで');
     }
-    return { cars: okCars, failed: failedFinal.length, rows: allRows.length, csv: state.csvPath };
+
+    // Dropbox への書き出し（全車種の本番取得だけ。テスト時は conf.exportTest で明示した時のみ）
+    if (!conf.maxCars || conf.exportTest) {
+      try {
+        state.exportDir = await dropboxExport.exportRun({
+          stamp, csvPath: state.csvPath, byMakerDir: path.join(OUTPUT_DIR, 'メーカー別', stamp), log,
+        });
+      } catch (e) {
+        log(`⚠️ Dropbox への保存に失敗: ${e.message}`);
+      }
+    }
+    return { cars: okCars, failed: failedFinal.length, rows: allRows.length, csv: state.csvPath, exportDir: state.exportDir };
   } catch (e) {
     if (allRows.length) {
       try { state.csvPath = writeCsv(allRows, stamp); log(`💾 途中結果を保存: ${allRows.length}件 → ${state.csvPath}`); } catch (_) {}

@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- みつかる君 サーチくん 2週おき自動クロール（毎週月曜 8:30 に起動 → 実行週かは biweekly_crawl.js が判定） -->
+  <key>Label</key>
+  <string>com.mitsucal.searchkun.biweekly</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>-lc</string>
+    <string>NODE=$(/bin/ls -d "$HOME"/.nvm/versions/node/*/bin/node 2>/dev/null | /usr/bin/tail -1); [ -z "$NODE" ] &amp;&amp; NODE=$(command -v node); exec "$NODE" "/Users/dezigozigmail.com/git/mitsucal_scraper/biweekly_crawl.js" >> "/Users/dezigozigmail.com/git/mitsucal_scraper/biweekly.log" 2>&amp;1</string>
+  </array>
+
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Weekday</key><integer>1</integer>
+    <key>Hour</key><integer>8</integer>
+    <key>Minute</key><integer>30</integer>
+  </dict>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/dezigozigmail.com/git/mitsucal_scraper</string>
+</dict>
+</plist>

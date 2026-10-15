@@ -20,3 +20,6 @@ output/
 archive/
 server.log
 .DS_Store
+
+# 自動クロールのログ
+biweekly.log
